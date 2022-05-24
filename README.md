@@ -48,7 +48,7 @@ You must have the following software installed on your machine:
     ```bash
     TWILIO_ACCOUNT_SID=ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     TWILIO_AUTH_TOKEN=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-    FLEX_FLOW_SID=FWXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    FLEX_FLOW_SID=FOXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     FLEX_CHAT_SERVICE=ISXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     WEBHOOK_BASE_URL=https://mywebhook.base
     ```
@@ -76,6 +76,32 @@ You must have the following software installed on your machine:
     gcloud app deploy
     ```
 
-1.  You'll also need to have a Firestore on your GCP project. We'll use a collection named 'channelmappings'.
+1.  You'll also need to have a Firestore instance on your GCP project. We'll use a collection named 'channelmappings'.
 
 1.  On your mobile device, use the test business URL associated with the Business Messages agent you created. Open a conversation with your agent and type in "Hello". Once delivered, you should receive a new task in Twilio Flex
+
+## Architecture
+
+The following illustrates a very high level architecture of this sample.
+
+![High level architecture](/assets/images/architecture.png)
+
+The files explained:
+
+- `app.js` - hosts the server.
+- `index.js` - main file, where callbacks from GBM and FLEX are received.
+- `flex.js` - contains methods to create a new channel in Flex, to delete a channel and to send a message.
+- `gbm.js` - contains the method to send a message to GBM.
+- `channelMapper.js` - interacts with Firestore to keep a mapping between the Flex Channel SID and the GBM Conversation ID.
+
+To explain it in more detail, here is the complete step-by-step:
+
+1. The customer sends a message using its mobile device (GBM in Google Maps)
+1. Google Business Messages triggers the configured webhook (your app engine). This will hit `/gbm-callback` in our `index.js` file.
+1. With the GBM Conversation ID, we will use `channelMapper.js` to check if there is already an active channel for this conversation. If it does not, we will use `flex.js` to create a new channel.
+1. After creating the channel, we will subscribe to listen to new messages from Flex on `/flex-callback` and for channel updates on `/flex-channel-updates`, both on our `index.js` file.
+1. Using the Flex Channel, we will use `flex.js` to send the message from GBM to Flex.
+1. The prior actions will trigger the Twilio Studio Flow and then a new task shows up in Flex for the available agent.
+1. When the agents replies back, the `flex-callback` method is invoked and we use `channelMapper.js` to identify the GBM Conversation ID.
+1. With the Conversation ID, we will use `gbm.js` to send the message from Flex to GBM.
+1. When the agent completes the task, `/flex-channel-update` is invoked and we use `channelMapper.js` to remove the mapping and `flex.js` to delete the Flex channel.
